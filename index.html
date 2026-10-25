@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SwitchGuard | Payment Resilience Engine</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-[#080d1a] text-slate-100 min-h-screen p-6 font-sans antialiased">
+  <div class="max-w-7xl mx-auto space-y-6">
+
+    <!-- Header -->
+    <header class="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-[#0f172a] p-5 rounded-2xl border border-slate-800 shadow-2xl">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg shadow-emerald-500/20">
+          ⚡
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl font-black text-white">SwitchGuard</h1>
+            <span class="text-[10px] font-mono font-bold bg-emerald-950 text-emerald-400 border border-emerald-700/60 px-2 py-0.5 rounded">
+              ONLINE
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Autonomous Real-Time Switch Degradation Engine & RBI Regulatory Triage</p>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex flex-wrap items-center gap-2 bg-[#080d1a] p-2 rounded-xl border border-slate-800">
+        <span class="text-[11px] font-mono text-slate-400 uppercase tracking-wider px-2">Simulate:</span>
+        <button onclick="injectFailure('SBI', 'UPI')" class="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-600/40 rounded-lg text-xs font-semibold transition">
+          Spike SBI UPI
+        </button>
+        <button onclick="injectFailure('HDFC', 'NETBANKING')" class="px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 border border-amber-600/40 rounded-lg text-xs font-semibold transition">
+          Crash HDFC NB
+        </button>
+        <button onclick="simulateBurst()" class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-600/40 rounded-lg text-xs font-semibold transition">
+          🔥 2.5x Peak Burst
+        </button>
+        <button onclick="recoverAll()" class="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-600/40 rounded-lg text-xs font-semibold transition">
+          Reset Nominal
+        </button>
+        <button onclick="fetchMetrics()" class="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-lg text-xs font-bold transition shadow-lg shadow-emerald-500/20">
+          Sync Metrics
+        </button>
+      </div>
+    </header>
+
+    <!-- KPI Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div class="bg-[#0f172a] p-4 rounded-xl border border-slate-800 shadow-xl">
+        <div class="text-[11px] text-slate-400 uppercase font-semibold">Analyzed Volume</div>
+        <div id="stat-txns" class="text-2xl font-bold text-white mt-1">100,000</div>
+        <div class="text-[10px] text-emerald-400 mt-1 font-mono">● In-Memory OLAP</div>
+      </div>
+      <div class="bg-[#0f172a] p-4 rounded-xl border border-slate-800 shadow-xl">
+        <div class="text-[11px] text-slate-400 uppercase font-semibold">Total Scanned GMV</div>
+        <div id="stat-gmv" class="text-2xl font-bold text-slate-200 mt-1">₹253,042,668.03</div>
+        <div class="text-[10px] text-slate-500 mt-1">Settled pipe volume</div>
+      </div>
+      <div class="bg-[#0f172a] p-4 rounded-xl border border-slate-800 shadow-xl">
+        <div class="text-[11px] text-slate-400 uppercase font-semibold">GMV at Risk</div>
+        <div id="stat-lost-gmv" class="text-2xl font-bold text-rose-400 mt-1">₹28,492,641.47</div>
+        <div class="text-[10px] text-rose-400/80 mt-1 font-mono">Dropout Impact</div>
+      </div>
+      <div class="bg-[#0f172a] p-4 rounded-xl border border-slate-800 shadow-xl">
+        <div class="text-[11px] text-slate-400 uppercase font-semibold">RBI Fine Exposure</div>
+        <div id="stat-rbi-penalties" class="text-2xl font-bold text-amber-400 mt-1">₹937,100</div>
+        <div class="text-[10px] text-amber-400/80 mt-1">₹100/day TAT liability</div>
+      </div>
+      <div class="bg-[#0f172a] p-4 rounded-xl border border-slate-800 shadow-xl">
+        <div class="text-[11px] text-slate-400 uppercase font-semibold">Degraded Switches</div>
+        <div id="stat-degraded" class="text-2xl font-bold text-rose-400 mt-1">5</div>
+        <div id="stat-status-badge" class="text-[10px] text-rose-400 mt-1 font-semibold">Circuit Breaker Active</div>
+      </div>
+    </div>
+
+    <!-- Triage Panel -->
+    <div id="diagnostics-panel" class="bg-[#1a111a] border border-rose-800/80 rounded-2xl p-5 shadow-2xl space-y-3">
+      <div class="flex items-center justify-between border-b border-rose-900/40 pb-2">
+        <div class="flex items-center gap-2 text-rose-300 font-bold text-sm">
+          <span class="h-2 w-2 rounded-full bg-rose-500 animate-ping"></span>
+          <span>AUTONOMOUS ROOT-CAUSE SYNTHESIS & CIRCUIT BREAKER ACTION</span>
+        </div>
+        <span class="text-[10px] font-mono bg-rose-950 text-rose-300 border border-rose-700/60 px-2.5 py-0.5 rounded font-bold">
+          FAILOVER TRIGGERED
+        </span>
+      </div>
+      <div id="diagnostics-content" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="bg-[#0f172a] p-5 rounded-2xl border border-slate-800 shadow-xl">
+        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">Bank Latency Breakdown (Avg ms)</h3>
+        <div class="h-56">
+          <canvas id="latencyChart"></canvas>
+        </div>
+      </div>
+      <div class="bg-[#0f172a] p-5 rounded-2xl border border-slate-800 shadow-xl">
+        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">Failure Rate Distribution (%)</h3>
+        <div class="h-56">
+          <canvas id="failureChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Granular Table -->
+    <div class="bg-[#0f172a] rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
+      <div class="p-4 border-b border-slate-800 flex flex-wrap justify-between items-center gap-3">
+        <div>
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider">Granular Route Telemetry</h2>
+          <p class="text-xs text-slate-400">Multi-dimensional slice: Bank × Mode × VPA</p>
+        </div>
+        <input 
+          id="table-search" 
+          type="text" 
+          placeholder="Filter bank, mode, vpa..." 
+          oninput="renderTable()"
+          class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 w-56 font-mono"
+        />
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950/80 text-slate-400 uppercase font-semibold border-b border-slate-800">
+            <tr>
+              <th class="p-3">Issuer Bank</th>
+              <th class="p-3">Mode</th>
+              <th class="p-3">VPA Route</th>
+              <th class="p-3 text-right">Volume</th>
+              <th class="p-3 text-right">Route GMV</th>
+              <th class="p-3 text-right">Failure Rate</th>
+              <th class="p-3 text-right">Avg Latency</th>
+              <th class="p-3 text-center">Circuit Status</th>
+            </tr>
+          </thead>
+          <tbody id="metrics-body" class="divide-y divide-slate-800/80 font-mono"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let globalRoutes = [];
+    let latChart = null;
+    let failChart = null;
+
+    async function fetchMetrics() {
+      try {
+        const res = await fetch('/api/switch-metrics');
+        if (!res.ok) throw new Error("HTTP error " + res.status);
+        const data = await res.json();
+        globalRoutes = data.routes || [];
+
+        document.getElementById('stat-txns').textContent = (data.total_txns || 100000).toLocaleString();
+        document.getElementById('stat-gmv').textContent = '₹' + (data.total_gmv || 0).toLocaleString();
+        document.getElementById('stat-lost-gmv').textContent = '₹' + (data.total_lost_gmv || 0).toLocaleString();
+        document.getElementById('stat-rbi-penalties').textContent = '₹' + (data.projected_rbi_penalties || 0).toLocaleString();
+
+        const degCount = document.getElementById('stat-degraded');
+        const statusBadge = document.getElementById('stat-status-badge');
+        degCount.textContent = data.anomalous_count || 0;
+
+        if (data.anomalous_count > 0) {
+          degCount.className = 'text-2xl font-bold text-rose-400 mt-1';
+          statusBadge.textContent = 'Circuit Breaker Active';
+          statusBadge.className = 'text-[10px] text-rose-400 mt-1 font-semibold';
+        } else {
+          degCount.className = 'text-2xl font-bold text-emerald-400 mt-1';
+          statusBadge.textContent = 'All Switches Nominal';
+          statusBadge.className = 'text-[10px] text-emerald-400 mt-1 font-semibold';
+        }
+
+        const diagPanel = document.getElementById('diagnostics-panel');
+        const diagContent = document.getElementById('diagnostics-content');
+        diagContent.innerHTML = '';
+
+        if (data.anomalous_count > 0 && data.diagnostics) {
+          diagPanel.classList.remove('hidden');
+          data.diagnostics.forEach(d => {
+            const el = document.createElement('div');
+            el.className = 'bg-[#22101a] border border-rose-800/60 p-3 rounded-xl text-xs space-y-1';
+            el.innerHTML = `
+              <div class="flex justify-between font-bold text-rose-300">
+                <span>${d.target}</span>
+                <span class="text-rose-400">${d.impact}</span>
+              </div>
+              <p class="text-slate-300 font-mono text-[11px]">${d.message}</p>
+              <p class="text-amber-400 text-[11px] font-mono">⚠️ ${d.rbi_penalty}</p>
+              <p class="text-emerald-400 text-[11px] font-medium mt-1">🛡️ ${d.recommendation}</p>
+            `;
+            diagContent.appendChild(el);
+          });
+        } else {
+          diagPanel.classList.add('hidden');
+        }
+
+        renderCharts(data.chart_data);
+        renderTable();
+
+      } catch (err) {
+        console.warn("Retrying fetch or using baseline:", err);
+      }
+    }
+
+    function renderTable() {
+      const filter = document.getElementById('table-search').value.toLowerCase();
+      const tbody = document.getElementById('metrics-body');
+      tbody.innerHTML = '';
+
+      const filtered = globalRoutes.filter(r => 
+        r.bank.toLowerCase().includes(filter) ||
+        r.mode.toLowerCase().includes(filter) ||
+        r.vpa_handle.toLowerCase().includes(filter)
+      );
+
+      filtered.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.className = r.is_anomalous ? 'bg-rose-950/25' : 'hover:bg-slate-800/40';
+        tr.innerHTML = `
+          <td class="p-3 font-semibold text-slate-200 font-sans">${r.bank}</td>
+          <td class="p-3 text-slate-300 font-sans">${r.mode}</td>
+          <td class="p-3 text-slate-400">${r.vpa_handle}</td>
+          <td class="p-3 text-right text-slate-300">${r.total_txns.toLocaleString()}</td>
+          <td class="p-3 text-right text-slate-400">₹${r.gmv.toLocaleString()}</td>
+          <td class="p-3 text-right ${r.failure_rate > 10 ? 'text-rose-400 font-bold' : 'text-emerald-400'}">${r.failure_rate}%</td>
+          <td class="p-3 text-right ${r.avg_latency > 1000 ? 'text-amber-400 font-bold' : 'text-slate-300'}">${r.avg_latency} ms</td>
+          <td class="p-3 text-center">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${r.is_anomalous ? 'bg-rose-900/80 text-rose-200 border border-rose-600' : 'bg-emerald-900/80 text-emerald-200 border border-emerald-600'}">
+              ${r.is_anomalous ? 'REROUTED → ' + r.circuit.fallback_bank : 'HEALTHY'}
+            </span>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderCharts(cd) {
+      if (!cd) return;
+      const ctxLat = document.getElementById('latencyChart').getContext('2d');
+      const ctxFail = document.getElementById('failureChart').getContext('2d');
+
+      if (latChart) latChart.destroy();
+      if (failChart) failChart.destroy();
+
+      latChart = new Chart(ctxLat, {
+        type: 'bar',
+        data: {
+          labels: cd.labels,
+          datasets: [{
+            label: 'Avg Latency (ms)',
+            data: cd.latencies,
+            backgroundColor: cd.latencies.map(l => l > 1000 ? '#f43f5e' : '#10b981'),
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } },
+            x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+          }
+        }
+      });
+
+      failChart = new Chart(ctxFail, {
+        type: 'line',
+        data: {
+          labels: cd.labels,
+          datasets: [{
+            label: 'Failure Rate %',
+            data: cd.failure_rates,
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            fill: true,
+            tension: 0.3,
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } },
+            x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+          }
+        }
+      });
+    }
+
+    async function injectFailure(bank, mode) {
+      await fetch('/api/inject-failure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bank, mode })
+      });
+      fetchMetrics();
+    }
+
+    async function simulateBurst() {
+      await fetch('/api/simulate-burst', { method: 'POST' });
+      fetchMetrics();
+    }
+
+    async function recoverAll() {
+      await fetch('/api/recover', { method: 'POST' });
+      fetchMetrics();
+    }
+
+    fetchMetrics();
+  </script>
+</body>
+</html>
